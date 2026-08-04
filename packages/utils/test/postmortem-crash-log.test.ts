@@ -52,6 +52,59 @@ describe("recordFatalCrash", () => {
 		expect(contents).toContain("[Unhandled Rejection]");
 		expect(contents).toContain("Request was aborted");
 	});
+	it("preserves the message of thrown plain objects instead of [object Object]", () => {
+		const target = tempCrashLog();
+		const reason = {
+			phase: "startup",
+			reason: "failed",
+			message: "Cannot append to corrupt session index log",
+		};
+		recordFatalCrash("Uncaught Exception", reason, { path: target });
+		const contents = fs.readFileSync(target, "utf8");
+		expect(contents).toContain("Cannot append to corrupt session index log");
+		expect(contents).not.toContain("[object Object]");
+	});
+	it("snapshots plain objects that have no string message", () => {
+		const target = tempCrashLog();
+		recordFatalCrash(
+			"Uncaught Exception",
+			{ code: "ECorrupt", nested: { host: "127.0.0.1", port: 8765 } },
+			{ path: target },
+		);
+		const contents = fs.readFileSync(target, "utf8");
+		expect(contents).toContain("ECorrupt");
+		expect(contents).toContain("127.0.0.1");
+		expect(contents).toContain("8765");
+		expect(contents).not.toContain("[object Object]");
+	});
+	it("never throws and still records a circular thrown object", () => {
+		const target = tempCrashLog();
+		const reason: Record<string, unknown> = { code: "ECircular" };
+		reason.self = reason;
+		const written = recordFatalCrash("Uncaught Exception", reason, { path: target });
+		expect(written).toBe(target);
+		const contents = fs.readFileSync(target, "utf8");
+		expect(contents).toContain("Uncaught Exception");
+		expect(contents).not.toContain("[object Object]");
+	});
+	it("preserves the name of a thrown object alongside its message", () => {
+		const target = tempCrashLog();
+		recordFatalCrash(
+			"Uncaught Exception",
+			{ name: "HindsightError", message: "listMentalModels failed" },
+			{ path: target },
+		);
+		const contents = fs.readFileSync(target, "utf8");
+		expect(contents).toContain("HindsightError");
+		expect(contents).toContain("listMentalModels failed");
+	});
+	it("leaves null on the existing primitive path", () => {
+		const target = tempCrashLog();
+		recordFatalCrash("Unhandled Rejection", null, { path: target });
+		const contents = fs.readFileSync(target, "utf8");
+		expect(contents).toContain("[Unhandled Rejection]");
+		expect(contents).toContain("null");
+	});
 
 	it("appends successive crashes rather than overwriting", () => {
 		const target = tempCrashLog();

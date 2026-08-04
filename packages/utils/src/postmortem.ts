@@ -191,7 +191,31 @@ function installProcessStdoutWriteClassifier(): void {
 }
 
 function errorForDiagnostic(reason: unknown): Error {
-	return reason instanceof Error ? reason : new Error(String(reason));
+	if (reason instanceof Error) return reason;
+	// A thrown plain object (e.g. a structured startup-failure shape such as
+	// `{ phase, reason, message }`) would otherwise stringify to
+	// "[object Object]", hiding the actual failure in the crash log and on
+	// stderr. Surface `.message` when present, otherwise fall back to a
+	// best-effort JSON snapshot. The snapshot is guarded because JSON.stringify
+	// throws on circular structures and throwing getters, and this runs on the
+	// uncaughtException path where it must never throw.
+	if (reason !== null && typeof reason === "object") {
+		const value = reason as Record<string, unknown>;
+		let message: string;
+		if (typeof value.message === "string" && value.message.length > 0) {
+			message = value.message;
+		} else {
+			try {
+				message = JSON.stringify(reason);
+			} catch {
+				message = "[unserializable thrown object]";
+			}
+		}
+		const error = new Error(message);
+		if (typeof value.name === "string" && value.name.length > 0) error.name = value.name;
+		return error;
+	}
+	return new Error(String(reason));
 }
 
 // Register signal and error event handlers to trigger cleanup before exit.

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fatal-crash diagnostics now preserve the `.message` (and `.name`) of thrown non-Error objects instead of reducing them to `[object Object]`, so a crash that throws a structured plain object surfaces its real reason in the crash log and on stderr.
+
 ## [0.12.11] - 2026-08-03
 
 ## [0.12.10] - 2026-08-03
